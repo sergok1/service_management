@@ -1,5 +1,5 @@
 #!/bin/bash
-# Включить автозапуск и запустить сервисы мониторинга
+# Включить автозапуск и запустить сервисы
 
 SERVICES=(
   "dcservice.service"
@@ -11,7 +11,7 @@ SERVICES=(
 )
 
 LOG="/var/log/services_management.log"
-echo "=== [$(date)] Включение сервисов мониторинга ===" | tee -a "$LOG"
+echo "=== [$(date)] Включение сервисов ===" | tee -a "$LOG"
 
 for svc in "${SERVICES[@]}"; do
   echo "--- [$svc] ---" | tee -a "$LOG"

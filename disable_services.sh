@@ -1,5 +1,5 @@
 #!/bin/bash
-# Остановить и отключить автозапуск сервисов мониторинга
+# Остановить и отключить автозапуск сервисов
 
 SERVICES=(
   "dcservice.service"
@@ -11,7 +11,7 @@ SERVICES=(
 )
 
 LOG="/var/log/services_management.log"
-echo "=== [$(date)] Отключение сервисов мониторинга ===" | tee -a "$LOG"
+echo "=== [$(date)] Отключение сервисов ===" | tee -a "$LOG"
 
 for svc in "${SERVICES[@]}"; do
   echo "--- [$svc] ---" | tee -a "$LOG"
