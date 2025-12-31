@@ -29,6 +29,11 @@
 
 ### Управляемые сервисы
 
+- **si.service** — SIAGENT Endpoint Agent 6.14.2.3 (основной агент мониторинга)
+  - Процессы: siagent, sid_lookup_server, traffic_parser, netfilter, x11monitor
+  - Влияние: Полный контроль сетевого трафика через TPROXY, мониторинг экрана, клавиатуры
+  - Unit-файл: `/usr/lib/systemd/system/si.service`
+  
 - **dcservice.service** — ManageEngine UEMS Agent
 - **kesl.service** — Kaspersky Endpoint Security for Linux
 - **klnagent64.service** — Kaspersky Network Agent
@@ -55,7 +60,7 @@
     ```
 4. Проверка статуса
     ```bash
-    systemctl status dcservice.service kesl.service klnagent64.service
+    systemctl status dcservice.service kesl.service klnagent64.service si.service
     ```
 
 ## Удаление

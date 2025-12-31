@@ -1,7 +1,17 @@
 #!/bin/bash
-# применяет оптимальные настройки для сервисов
+# apply_resource_limits.sh — Применить ограничения ресурсов для сервисов мониторинга
 
 declare -A configs
+
+configs[si.service]="CPUWeight=30
+CPUQuota=35%
+Nice=15
+MemoryMax=2G
+MemoryHigh=1.5G
+IOWeight=20
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7"
+
 configs[dcservice.service]="CPUWeight=20
 CPUQuota=22%
 Nice=19
@@ -37,15 +47,27 @@ IOWeight=20
 IOSchedulingClass=best-effort
 IOSchedulingPriority=6"
 
+LOG="/var/log/apply_resource_limits.log"
+echo "=== [$(date)] Применение ограничений ресурсов ===" | tee -a "$LOG"
+
 for svc in "${!configs[@]}"; do
   dir="/etc/systemd/system/$svc.d"
+  echo "--- [$svc] ---" | tee -a "$LOG"
   sudo mkdir -p "$dir"
-  echo -e "[Service]\n${configs[$svc]}" | sudo tee "$dir/override.conf"
+  echo -e "[Service]\n${configs[$svc]}" | sudo tee "$dir/override.conf" | tee -a "$LOG"
 done
 
 sudo systemctl daemon-reload
+echo "systemctl daemon-reload выполнен" | tee -a "$LOG"
+
 for svc in "${!configs[@]}"; do
-  sudo systemctl restart "$svc"
+  if systemctl is-active --quiet "$svc"; then
+    sudo systemctl restart "$svc"
+    echo "Перезапущен: $svc" | tee -a "$LOG"
+  else
+    echo "Сервис $svc не активен, пропущено" | tee -a "$LOG"
+  fi
 done
 
-echo "✅ Ограничения применены и сервисы перезапущены."
+echo "✅ Ограничения применены" | tee -a "$LOG"
+echo "=== [$(date)] Применение завершено ===" | tee -a "$LOG"
