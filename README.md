@@ -13,8 +13,9 @@
 
 ## Состав репозитория
 
-| Скрипт | Назначение |
-|--------|-----------|
+| Файл | Назначение |
+|------|-----------|
+| `services.conf` | Единый список управляемых сервисов |
 | `disable_services.sh` | Остановка, отключение автозапуска и маскировка сервисов |
 | `enable_services.sh` | Снятие маски, включение автозапуска и запуск сервисов |
 | `apply_resource_limits.sh` | Применение ограничений CPU/RAM/IO через systemd drop-in |
@@ -23,10 +24,7 @@
 ## Быстрый старт
 
 ```bash
-# Клонировать репозиторий
 git clone git@github.com:sergok1/service_management.git && cd service_management
-
-# Сделать скрипты исполняемыми
 chmod +x *.sh
 ```
 
@@ -36,7 +34,7 @@ chmod +x *.sh
 sudo ./disable_services.sh
 ```
 
-Скрипт остановит сервисы, отключит автозапуск и замаскирует их (предотвращает запуск по зависимости).
+Скрипт остановит сервисы (с таймаутом), отключит автозапуск, замаскирует их и проверит, что процессы завершены.
 
 ### Включение сервисов
 
@@ -44,7 +42,7 @@ sudo ./disable_services.sh
 sudo ./enable_services.sh
 ```
 
-Скрипт снимет маску, включит автозапуск и запустит сервисы.
+Скрипт снимет маску, включит автозапуск, запустит сервисы и проверит, что они не упали после старта.
 
 ### Ограничение ресурсов
 
@@ -54,7 +52,7 @@ sudo ./enable_services.sh
 sudo ./apply_resource_limits.sh
 ```
 
-Скрипт создаёт systemd drop-in override для каждого сервиса с настройками `CPUQuota`, `MemoryMax`, `Nice`, `IOWeight` и др.
+Скрипт создаёт systemd drop-in override для каждого сервиса с настройками `CPUQuota`, `CPUWeight`, `MemoryMax`, `MemoryHigh`, `Nice`, `IOWeight` и др.
 
 ### Откат ограничений
 
@@ -62,7 +60,15 @@ sudo ./apply_resource_limits.sh
 sudo ./remove_systemd_overrides.sh
 ```
 
-Скрипт удалит override-файлы, предварительно сохранив резервные копии в `/root/systemd_override_backups_<timestamp>/`.
+Скрипт удалит override-файлы, предварительно сохранив резервные копии. Старые бэкапы автоматически ротируются (хранятся последние 5).
+
+## Конфигурация
+
+Список сервисов задаётся в файле `services.conf` — по одному на строку. Все скрипты (кроме `apply_resource_limits.sh`) читают его автоматически.
+
+Для `apply_resource_limits.sh` конфигурация лимитов задаётся внутри скрипта, так как каждый сервис имеет индивидуальные параметры.
+
+Чтобы добавить или убрать сервис — отредактируйте `services.conf` и, при необходимости, массив `configs` в `apply_resource_limits.sh`.
 
 ## Логирование
 
@@ -70,14 +76,18 @@ sudo ./remove_systemd_overrides.sh
 
 ## Требования
 
-- Linux с systemd
+- Linux с systemd (cgroups v2)
 - Права root (sudo)
-- bash 4+
+- bash 4+ (для `mapfile` и ассоциативных массивов)
 
 ## Безопасность и восстановление
 
 - Все скрипты проверяют наличие прав root перед выполнением
-- `remove_systemd_overrides.sh` создаёт резервные копии перед удалением
+- Проверяется существование юнита перед любой операцией
+- `disable_services.sh` использует таймаут на остановку сервисов
+- `enable_services.sh` проверяет, что сервис не упал после запуска
+- `apply_resource_limits.sh` проверяет, что сервис не упал после применения лимитов
+- `remove_systemd_overrides.sh` создаёт резервные копии и ротирует старые
 - Для восстановления ограничений из бэкапа:
 
 ```bash
@@ -86,16 +96,3 @@ sudo cp /root/systemd_override_backups_<timestamp>/<service>.service.d/override.
 sudo systemctl daemon-reload
 sudo systemctl restart <service>
 ```
-
-## Список управляемых сервисов
-
-Сервисы настраиваются в массиве `SERVICES` внутри каждого скрипта. По умолчанию:
-
-- `si.service`
-- `dcservice.service`
-- `kesl.service`
-- `klnagent64.service`
-- `kaspersky-agent-check.service`
-- `kaspersky-agent-check.timer`
-
-Для добавления или удаления сервисов отредактируйте массив `SERVICES` в нужном скрипте.

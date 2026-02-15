@@ -9,65 +9,97 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-SERVICES=(
-  "si.service"
-  "dcservice.service"
-  "kesl.service"
-  "klnagent64.service"
-  "kaspersky-agent-check.service"
-  "kaspersky-agent-check.timer"
-)
+# --- Загрузка списка сервисов ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONF="$SCRIPT_DIR/services.conf"
+
+if [[ ! -f "$CONF" ]]; then
+  echo "❌ Файл конфигурации не найден: $CONF" >&2
+  exit 1
+fi
+
+mapfile -t SERVICES < <(grep -v '^\s*#' "$CONF" | grep -v '^\s*$')
+
+if [[ ${#SERVICES[@]} -eq 0 ]]; then
+  echo "❌ Список сервисов пуст в $CONF" >&2
+  exit 1
+fi
 
 LOG="/var/log/services_management.log"
 ERRORS=0
+STOP_TIMEOUT=30  # секунд на остановку одного сервиса
+
+# --- Проверка существования юнита ---
+unit_exists() {
+  systemctl list-unit-files --no-pager --no-legend "$1" 2>/dev/null | grep -q "$1"
+}
 
 echo "=== [$(date)] Отключение сервисов ===" | tee -a "$LOG"
 
-for svc in "${SERVICES[@]}"; do
+# Обратный порядок: сначала таймеры, потом сервисы
+# (при отключении таймер нужно остановить до сервиса, чтобы он не перезапустил его)
+for (( i=${#SERVICES[@]}-1; i>=0; i-- )); do
+  svc="${SERVICES[$i]}"
   echo "--- [$svc] ---" | tee -a "$LOG"
 
-  # Проверяем, существует ли юнит
-  if ! systemctl list-unit-files "$svc" &>/dev/null; then
-    echo "⚠️  Юнит $svc не найден, пропускаю." | tee -a "$LOG"
+  if ! unit_exists "$svc"; then
+    echo "  ⚠️  Юнит не найден, пропускаю." | tee -a "$LOG"
     continue
   fi
 
-  # Останавливаем (игнорируем ошибку, если уже остановлен)
+  # Останавливаем с таймаутом
   if systemctl is-active --quiet "$svc"; then
-    systemctl stop "$svc" 2>>"$LOG" && echo "  ✓ Остановлен" | tee -a "$LOG" || {
-      echo "  ✗ Ошибка остановки" | tee -a "$LOG"
+    if timeout "$STOP_TIMEOUT" systemctl stop "$svc" 2>>"$LOG"; then
+      echo "  ✓ Остановлен" | tee -a "$LOG"
+    else
+      echo "  ✗ Ошибка остановки (таймаут ${STOP_TIMEOUT}с или сбой)" | tee -a "$LOG"
       ((ERRORS++))
-    }
+    fi
   else
     echo "  — Уже остановлен" | tee -a "$LOG"
   fi
 
   # Отключаем автозапуск
-  systemctl disable "$svc" 2>>"$LOG" && echo "  ✓ Автозапуск отключён" | tee -a "$LOG" || {
+  if systemctl disable "$svc" 2>>"$LOG"; then
+    echo "  ✓ Автозапуск отключён" | tee -a "$LOG"
+  else
     echo "  ✗ Ошибка отключения автозапуска" | tee -a "$LOG"
     ((ERRORS++))
-  }
+  fi
 
   # Маскируем — предотвращает запуск по зависимости
-  systemctl mask "$svc" 2>>"$LOG" && echo "  ✓ Замаскирован" | tee -a "$LOG" || {
+  if systemctl mask "$svc" 2>>"$LOG"; then
+    echo "  ✓ Замаскирован" | tee -a "$LOG"
+  else
     echo "  ✗ Ошибка маскировки" | tee -a "$LOG"
     ((ERRORS++))
-  }
+  fi
 
-  systemctl status "$svc" --no-pager 2>&1 | tee -a "$LOG"
   echo "" | tee -a "$LOG"
 done
 
-# Проверить, что процессы SIAGENT остановлены
-echo "=== Проверка процессов SIAGENT ===" | tee -a "$LOG"
-remaining=$(ps aux | grep -E 'siagent|traffic_parser|netfilter|x11monitor|sid_lookup' | grep -v grep || true)
-if [ -z "$remaining" ]; then
-  echo "✅ Все процессы SIAGENT остановлены" | tee -a "$LOG"
+# --- Проверка оставшихся процессов ---
+echo "=== Проверка оставшихся процессов ===" | tee -a "$LOG"
+remaining=$(pgrep -af 'siagent|traffic_parser|netfilter|x11monitor|sid_lookup|dcservice' 2>/dev/null || true)
+if [[ -z "$remaining" ]]; then
+  echo "✅ Все процессы остановлены" | tee -a "$LOG"
 else
-  echo "⚠️ Обнаружены оставшиеся процессы:" | tee -a "$LOG"
+  echo "⚠️  Обнаружены оставшиеся процессы:" | tee -a "$LOG"
   echo "$remaining" | tee -a "$LOG"
 fi
 
+# --- Итоговый статус ---
+echo "" | tee -a "$LOG"
+echo "=== Статус сервисов ===" | tee -a "$LOG"
+for svc in "${SERVICES[@]}"; do
+  if unit_exists "$svc"; then
+    state=$(systemctl is-active "$svc" 2>/dev/null || true)
+    enabled=$(systemctl is-enabled "$svc" 2>/dev/null || true)
+    printf "  %-40s active=%-10s enabled=%s\n" "$svc" "$state" "$enabled" | tee -a "$LOG"
+  fi
+done
+
+echo "" | tee -a "$LOG"
 echo "=== [$(date)] Отключение завершено (ошибок: $ERRORS) ===" | tee -a "$LOG"
 
 if [[ $ERRORS -gt 0 ]]; then
