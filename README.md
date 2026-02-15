@@ -1,133 +1,102 @@
-# 🛡️ Управление сервисами мониторинга
+# Управление сервисами
 
-Набор bash-скриптов для управления агентами мониторинга и оптимизации их ресурсопотребления.
+Набор bash-скриптов для управления системными сервисами и оптимизации их ресурсопотребления в Linux.
 
-## 📋 Описание проблемы
+## Описание
 
-Агенты мониторинга (ManageEngine UEMS, Kaspersky Endpoint Security) могут потреблять значительные ресурсы:
-- **CPU:** до 120% (многопоточность)
-- **RAM:** до 3+ ГБ
-- **I/O:** интенсивные операции чтения/записи
+Некоторые фоновые сервисы могут потреблять значительные системные ресурсы:
+- **CPU** — высокая нагрузка в многопоточном режиме
+- **RAM** — потребление до нескольких гигабайт
+- **I/O** — интенсивные операции чтения/записи
 
-Это приводит к **подвисаниям системы и снижению производительности**.
+Это приводит к снижению производительности и отзывчивости системы. Данный набор инструментов позволяет гибко управлять такими сервисами: временно отключать, включать обратно или ограничивать потребление ресурсов через systemd.
 
-## 🎯 Решение
+## Состав репозитория
 
-Этот набор инструментов предлагает два подхода:
+| Скрипт | Назначение |
+|--------|-----------|
+| `disable_services.sh` | Остановка, отключение автозапуска и маскировка сервисов |
+| `enable_services.sh` | Снятие маски, включение автозапуска и запуск сервисов |
+| `apply_resource_limits.sh` | Применение ограничений CPU/RAM/IO через systemd drop-in |
+| `remove_systemd_overrides.sh` | Удаление ограничений с созданием резервных копий |
 
-1. **Управление сервисами** — временное отключение/включение агентов
-2. **Оптимизация ресурсов** — снижение приоритета и ограничение потребления через systemd
+## Быстрый старт
 
-## 📦 Состав репозитория
+# Клонировать репозиторий
+```bash
+git clone git@github.com:sergok1/service_management.git && cd service_management
+```
 
-| Файл | Назначение | Риск |
-|------|-----------|------|
-| `disable_services.sh` | Остановка и отключение автозапуска сервисов | 🔴 Высокий |
-| `enable_services.sh` | Включение и запуск сервисов | 🟢 Низкий |
-| `apply_resource_limits.sh` | Применение ограничений CPU/RAM/IO | 🟡 Низкий |
-| `remove_systemd_overrides.sh` | Удаление ограничений | 🟢 Низкий |
+# Сделать скрипты исполняемыми
+```bash
+chmod +x *.sh
+```
 
-### Управляемые сервисы
+### Отключение сервисов
 
-- **dcservice.service** — ManageEngine UEMS Agent
-- **kesl.service** — Kaspersky Endpoint Security for Linux
-- **klnagent64.service** — Kaspersky Network Agent
-- **kaspersky-agent-check.service** — Kaspersky Agent Check Service
-- **kaspersky-agent-check.timer** — Таймер автопроверки агентов
+```bash
+sudo ./disable_services.sh
+```
 
-## 📦 Состав
+Скрипт остановит сервисы, отключит автозапуск и замаскирует их (предотвращает запуск по зависимости).
 
-- `disable_services.sh` — остановка и отключение автозапуска сервисов
-- `enable_services.sh` — включение автозапуска и запуск сервисов
+### Включение сервисов
 
+```bash
+sudo ./enable_services.sh
+```
 
-## 🚀 Установка
+Скрипт снимет маску, включит автозапуск и запустит сервисы.
 
-1. Скачай оба скрипта в удобный каталог
+### Ограничение ресурсов
 
-2. Сделай их исполняемыми
-    ```bash
-    chmod +x disable_services.sh enable_services.sh
-    ```
-3. Включение сервисов
-    ```bash
-    sudo ./enable_services.sh
-    ```
-4. Проверка статуса
-    ```bash
-    systemctl status dcservice.service kesl.service klnagent64.service
-    ```
+Если полное отключение нежелательно, можно ограничить потребление ресурсов:
 
-## Удаление
-    Отключение сервисов
-    ```bash
-    sudo ./disable_services.sh
-    ```
+```bash
+sudo ./apply_resource_limits.sh
+```
 
-Что делает скрипт:
-Останавливает все указанные сервисы
-Отключает их автозапуск при загрузке системы
-Выводит статус каждого сервиса
-Логирует все действия в /var/log/services_management.log
+Скрипт создаёт systemd drop-in override для каждого сервиса с настройками `CPUQuota`, `MemoryMax`, `Nice`, `IOWeight` и др.
 
----
+### Откат ограничений
 
+```bash
+sudo ./remove_systemd_overrides.sh
+```
 
+Скрипт удалит override-файлы, предварительно сохранив резервные копии в `/root/systemd_override_backups_<timestamp>/`.
 
-# 🚦 Оптимизация ресурсопотребления сервисов
+## Логирование
 
-Набор bash-скриптов для изменения приоритета (nice, ionice), ограничить CPU/память через systemd drop-in.
+Все действия логируются в `/var/log/services_management.log`. Каждая запись содержит временную метку и результат операции.
 
-## 📋 Описание
+## Требования
 
+- Linux с systemd
+- Права root (sudo)
+- bash 4+
 
-## 🚀 Установка
+## Безопасность и восстановление
 
-1. Скачай оба скрипта в удобный каталог
+- Все скрипты проверяют наличие прав root перед выполнением
+- `remove_systemd_overrides.sh` создаёт резервные копии перед удалением
+- Для восстановления ограничений из бэкапа:
 
-2. Сделай их исполняемыми
-    ```bash
-    chmod +x apply_resource_limits.sh enable_services.sh
-    ```
-3. Запуск скрипта
-    ```bash
-    sudo ./apply_resource_limits.sh
-    ```
+```bash
+sudo cp /root/systemd_override_backups_<timestamp>/<service>.service.d/override.conf \
+  /etc/systemd/system/<service>.service.d/override.conf
+sudo systemctl daemon-reload
+sudo systemctl restart <service>
+```
 
-## Ручной откат изменений
-1. Удали или переименуй файлы /etc/systemd/system/<service>.service.d/override.conf
-    ```bash
-    sudo systemctl daemon-reload
-    ```
-    
-    ```bash
-    sudo systemctl restart <service>
-    ```
-## Скрипт для отката изменений
-1. Сделай исполняемым
-    ```bash
-    chmod +x remove_systemd_overrides.sh
-    ```
-2. Запусти
-    ```bash
-    sudo ./remove_systemd_overrides.sh
-    ```
-3. Логи действий хранятся
-    ```
-    /var/log/remove_overrides.log
-    ```
-4. Резервные копии хранятся
-    ```
-    /root/systemd_override_backups_YYYYMMDD_HHMMSS/
-    ```
+## Список управляемых сервисов
 
-## 📋 Безопасность и восстановление
+Сервисы настраиваются в массиве `SERVICES` внутри каждого скрипта. По умолчанию:
 
-- **Резервные копии** override.conf сохраняются для каждого сервиса.
-- Для восстановления просто скопируй нужный override.conf обратно:
-  ```bash
-  sudo cp /root/systemd_override_backups_YYYYMMDD_HHMMSS/<service>.service.d/override.conf /etc/systemd/system/<service>.service.d/override.conf
-  sudo systemctl daemon-reload
-  sudo systemctl restart <service>
-  ```
-- **Скрипт не удаляет другие настройки systemd и не влияет на работу сервисов, кроме снятия ограничений.**
+- `dcservice.service`
+- `kesl.service`
+- `klnagent64.service`
+- `kaspersky-agent-check.service`
+- `kaspersky-agent-check.timer`
+
+Для добавления или удаления сервисов отредактируйте массив `SERVICES` в нужном скрипте.

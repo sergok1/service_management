@@ -1,5 +1,16 @@
 #!/bin/bash
-# применяет оптимальные настройки для сервисов
+# Применяет ограничения ресурсов для сервисов через systemd drop-in
+
+set -euo pipefail
+
+# --- Проверка прав ---
+if [[ $EUID -ne 0 ]]; then
+  echo "❌ Этот скрипт необходимо запускать с правами root (sudo)." >&2
+  exit 1
+fi
+
+LOG="/var/log/services_management.log"
+ERRORS=0
 
 declare -A configs
 configs[dcservice.service]="CPUWeight=20
@@ -37,15 +48,38 @@ IOWeight=20
 IOSchedulingClass=best-effort
 IOSchedulingPriority=6"
 
+echo "=== [$(date)] Применение ограничений ресурсов ===" | tee -a "$LOG"
+
 for svc in "${!configs[@]}"; do
+  echo "--- [$svc] ---" | tee -a "$LOG"
+
   dir="/etc/systemd/system/$svc.d"
-  sudo mkdir -p "$dir"
-  echo -e "[Service]\n${configs[$svc]}" | sudo tee "$dir/override.conf"
+  mkdir -p "$dir"
+
+  echo -e "[Service]\n${configs[$svc]}" > "$dir/override.conf" && \
+    echo "  ✓ override.conf создан: $dir/override.conf" | tee -a "$LOG" || {
+    echo "  ✗ Ошибка создания override.conf" | tee -a "$LOG"
+    ((ERRORS++))
+  }
 done
 
-sudo systemctl daemon-reload
+echo "Перезагрузка конфигурации systemd..." | tee -a "$LOG"
+systemctl daemon-reload
+
 for svc in "${!configs[@]}"; do
-  sudo systemctl restart "$svc"
+  if systemctl is-active --quiet "$svc"; then
+    systemctl restart "$svc" && echo "  ✓ $svc перезапущен" | tee -a "$LOG" || {
+      echo "  ✗ Ошибка перезапуска $svc" | tee -a "$LOG"
+      ((ERRORS++))
+    }
+  else
+    echo "  — $svc не активен, перезапуск не требуется" | tee -a "$LOG"
+  fi
 done
 
-echo "✅ Ограничения применены и сервисы перезапущены."
+echo "=== [$(date)] Ограничения применены (ошибок: $ERRORS) ===" | tee -a "$LOG"
+
+if [[ $ERRORS -gt 0 ]]; then
+  echo "⚠️  Были ошибки, проверьте лог: $LOG"
+  exit 1
+fi
