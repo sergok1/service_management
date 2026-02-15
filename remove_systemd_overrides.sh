@@ -10,6 +10,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 SERVICES=(
+  "si.service"
   "dcservice.service"
   "kesl.service"
   "klnagent64.service"

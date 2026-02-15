@@ -1,5 +1,19 @@
 #!/bin/bash
 # Применяет ограничения ресурсов для сервисов через systemd drop-in
+#
+# Логика лимитов:
+#   CPUWeight    — относительный приоритет CPU между сервисами (1-10000, default=100).
+#                  Работает только при конкуренции за CPU.
+#   CPUQuota     — жёсткий потолок CPU (% от одного ядра). Действует даже на idle-системе.
+#   Nice         — приоритет планировщика (-20..19, выше число = ниже приоритет).
+#   MemoryHigh   — мягкий лимит: ядро начинает рекламировать (reclaim) память.
+#   MemoryMax    — жёсткий лимит: при превышении OOM killer убьёт процесс.
+#                  Зазор между MemoryHigh и MemoryMax даёт процессу время среагировать.
+#   IOWeight     — относительный приоритет I/O (1-10000, default=100).
+#   IOSchedulingClass   — класс I/O планировщика (best-effort рекомендуется;
+#                         idle на практике плохо работает с async writes).
+#   IOSchedulingPriority — приоритет внутри класса (0=высший, 7=низший).
+#   LimitNOFILE  — лимит файловых дескрипторов (рекомендация Kaspersky для klnagent64).
 
 set -euo pipefail
 
@@ -14,49 +28,69 @@ ERRORS=0
 
 declare -A configs
 
-configs[si.service]="CPUWeight=30
-CPUQuota=35%
-Nice=15
+# --- si.service (SIAGENT) ---
+# Тяжёлый агент: множество дочерних процессов (traffic_parser, netfilter, x11monitor и др.)
+# Агрессивные лимиты CPU/RAM, минимальный I/O приоритет
+configs[si.service]="CPUWeight=10
+CPUQuota=30%
+Nice=19
 MemoryMax=2G
-MemoryHigh=1.5G
-IOWeight=20
+MemoryHigh=1536M
+IOWeight=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7"
 
-configs[dcservice.service]="CPUWeight=20
-CPUQuota=22%
+# --- dcservice.service (ManageEngine UEMS Agent) ---
+# Периодически сканирует систему, может давать всплески CPU.
+# IOSchedulingClass=best-effort вместо idle (idle не работает для async writes)
+configs[dcservice.service]="CPUWeight=15
+CPUQuota=20%
 Nice=19
 MemoryMax=1745M
-MemoryHigh=1476M
+MemoryHigh=1400M
 IOWeight=10
-IOSchedulingClass=idle"
-
-configs[kesl.service]="CPUWeight=40
-CPUQuota=37%
-Nice=12
-MemoryMax=1924M
-MemoryHigh=1628M
-IOWeight=20
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7"
 
-configs[klnagent64.service]="CPUWeight=60
-CPUQuota=30%
-Nice=5
-MemoryMax=277M
-MemoryHigh=234M
-IOWeight=50
-IOSchedulingClass=best-effort
-IOSchedulingPriority=4"
-
-configs[kaspersky-agent-check.service]="CPUWeight=40
-CPUQuota=25%
-Nice=12
-MemoryMax=361M
-MemoryHigh=305M
+# --- kesl.service (Kaspersky Endpoint Security) ---
+# Самый ресурсоёмкий из Kaspersky-сервисов.
+# Дополнительно рекомендуется настроить встроенные лимиты:
+#   /var/opt/kaspersky/kesl/common/kesl.ini → [General] ScanMemoryLimit=2048
+#   kesl-control --set-settings <ODS task ID> ScanPriority=Idle
+configs[kesl.service]="CPUWeight=30
+CPUQuota=35%
+Nice=15
+MemoryMax=1924M
+MemoryHigh=1536M
 IOWeight=20
 IOSchedulingClass=best-effort
 IOSchedulingPriority=6"
+
+# --- klnagent64.service (Kaspersky Network Agent) ---
+# Лёгкий агент связи с KSC. Низкое потребление RAM, но может открывать много fd.
+# LimitNOFILE рекомендован документацией Kaspersky.
+# Также можно включить low resource consumption mode в политике KSC.
+configs[klnagent64.service]="CPUWeight=50
+CPUQuota=25%
+Nice=10
+MemoryMax=350M
+MemoryHigh=256M
+IOWeight=30
+IOSchedulingClass=best-effort
+IOSchedulingPriority=5
+LimitNOFILE=4096:8192"
+
+# --- kaspersky-agent-check.service ---
+# Периодическая проверка состояния агентов (запускается таймером).
+# Кратковременный процесс — лимиты мягкие.
+configs[kaspersky-agent-check.service]="CPUWeight=20
+CPUQuota=20%
+Nice=19
+MemoryMax=361M
+MemoryHigh=256M
+IOWeight=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7"
 
 echo "=== [$(date)] Применение ограничений ресурсов ===" | tee -a "$LOG"
 
