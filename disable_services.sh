@@ -10,6 +10,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 SERVICES=(
+  "si.service"
   "dcservice.service"
   "kesl.service"
   "klnagent64.service"
@@ -56,6 +57,16 @@ for svc in "${SERVICES[@]}"; do
   systemctl status "$svc" --no-pager 2>&1 | tee -a "$LOG"
   echo "" | tee -a "$LOG"
 done
+
+# Проверить, что процессы SIAGENT остановлены
+echo "=== Проверка процессов SIAGENT ===" | tee -a "$LOG"
+remaining=$(ps aux | grep -E 'siagent|traffic_parser|netfilter|x11monitor|sid_lookup' | grep -v grep || true)
+if [ -z "$remaining" ]; then
+  echo "✅ Все процессы SIAGENT остановлены" | tee -a "$LOG"
+else
+  echo "⚠️ Обнаружены оставшиеся процессы:" | tee -a "$LOG"
+  echo "$remaining" | tee -a "$LOG"
+fi
 
 echo "=== [$(date)] Отключение завершено (ошибок: $ERRORS) ===" | tee -a "$LOG"
 

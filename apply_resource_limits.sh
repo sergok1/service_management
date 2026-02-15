@@ -13,6 +13,16 @@ LOG="/var/log/services_management.log"
 ERRORS=0
 
 declare -A configs
+
+configs[si.service]="CPUWeight=30
+CPUQuota=35%
+Nice=15
+MemoryMax=2G
+MemoryHigh=1.5G
+IOWeight=20
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7"
+
 configs[dcservice.service]="CPUWeight=20
 CPUQuota=22%
 Nice=19

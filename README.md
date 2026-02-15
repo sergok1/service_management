@@ -22,13 +22,11 @@
 
 ## Быстрый старт
 
-# Клонировать репозиторий
 ```bash
+# Клонировать репозиторий
 git clone git@github.com:sergok1/service_management.git && cd service_management
-```
 
 # Сделать скрипты исполняемыми
-```bash
 chmod +x *.sh
 ```
 
@@ -93,6 +91,7 @@ sudo systemctl restart <service>
 
 Сервисы настраиваются в массиве `SERVICES` внутри каждого скрипта. По умолчанию:
 
+- `si.service`
 - `dcservice.service`
 - `kesl.service`
 - `klnagent64.service`
