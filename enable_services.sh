@@ -37,7 +37,7 @@ unit_exists() {
 
 echo "=== [$(date)] Включение сервисов ===" | tee -a "$LOG"
 
-# Прямой порядок: таймеры перед сервисами (как в services.conf)
+# Прямой порядок (как в services.conf): service перед timer
 for svc in "${SERVICES[@]}"; do
   echo "--- [$svc] ---" | tee -a "$LOG"
 
