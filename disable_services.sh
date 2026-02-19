@@ -27,7 +27,7 @@ fi
 
 LOG="/var/log/services_management.log"
 ERRORS=0
-STOP_TIMEOUT=30  # секунд на остановку одного сервиса
+STOP_TIMEOUT=60  # секунд на остановку одного сервиса
 UNIT_BACKUP_DIR="/var/lib/services_management/unit_backups"
 
 # --- Проверка существования юнита ---
@@ -48,17 +48,25 @@ for (( i=${#SERVICES[@]}-1; i>=0; i-- )); do
     continue
   fi
 
-  # Останавливаем с таймаутом
+  # Останавливаем с таймаутом; если graceful stop не помог — kill
   if systemctl is-active --quiet "$svc"; then
     if timeout "$STOP_TIMEOUT" systemctl stop "$svc" 2>>"$LOG"; then
       echo "  ✓ Остановлен" | tee -a "$LOG"
     else
-      echo "  ✗ Ошибка остановки (таймаут ${STOP_TIMEOUT}с или сбой)" | tee -a "$LOG"
-      ERRORS=$((ERRORS + 1))
+      echo "  ⚠️  Graceful stop не удался (${STOP_TIMEOUT}с), принудительное завершение..." | tee -a "$LOG"
+      if systemctl kill --signal=SIGKILL "$svc" 2>>"$LOG"; then
+        echo "  ✓ Принудительно остановлен (SIGKILL)" | tee -a "$LOG"
+      else
+        echo "  ✗ Не удалось остановить даже принудительно" | tee -a "$LOG"
+        ERRORS=$((ERRORS + 1))
+      fi
     fi
   else
     echo "  — Уже остановлен" | tee -a "$LOG"
   fi
+
+  # Сбрасываем failed-статус, чтобы итоговый отчёт показывал чистое состояние
+  systemctl reset-failed "$svc" 2>/dev/null || true
 
   # Отключаем автозапуск
   if systemctl disable "$svc" 2>>"$LOG"; then
