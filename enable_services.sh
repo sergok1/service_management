@@ -79,9 +79,11 @@ for svc in "${SERVICES[@]}"; do
   if systemctl start "$svc" 2>>"$LOG"; then
     echo "  ✓ Запущен" | tee -a "$LOG"
 
-    # Ждём и проверяем, что сервис не упал сразу после старта
+    # Ждём и проверяем, что сервис не упал сразу после старта.
+    # Используем is-failed вместо ! is-active, т.к. oneshot-сервисы
+    # штатно переходят в inactive после завершения.
     sleep "$START_SETTLE"
-    if ! systemctl is-active --quiet "$svc"; then
+    if systemctl is-failed --quiet "$svc"; then
       echo "  ⚠️  Сервис упал после запуска!" | tee -a "$LOG"
       journalctl -u "$svc" -n 5 --no-pager 2>/dev/null | tee -a "$LOG"
       ERRORS=$((ERRORS + 1))
