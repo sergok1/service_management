@@ -95,8 +95,12 @@ log "=== Watchdog check started (fix=${AUTO_FIX}) ==="
 # ============================================================
 log "--- Проверка статуса сервисов ---"
 for svc in "${SERVICES[@]}"; do
-  enabled_state=$(systemctl is-enabled "$svc" 2>/dev/null | head -1 || echo "unknown")
-  active_state=$(systemctl is-active "$svc" 2>/dev/null | head -1 || echo "unknown")
+  enabled_state=$(systemctl is-enabled "$svc" 2>/dev/null || true)
+  enabled_state="${enabled_state%%$'\n'*}"
+  enabled_state="${enabled_state:-unknown}"
+  active_state=$(systemctl is-active "$svc" 2>/dev/null || true)
+  active_state="${active_state%%$'\n'*}"
+  active_state="${active_state:-unknown}"
 
   if [[ "$enabled_state" != "masked" ]]; then
     alert "$svc не замаскирован (enabled=$enabled_state)"
