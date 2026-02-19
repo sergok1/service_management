@@ -65,9 +65,6 @@ for (( i=${#SERVICES[@]}-1; i>=0; i-- )); do
     echo "  — Уже остановлен" | tee -a "$LOG"
   fi
 
-  # Сбрасываем failed-статус, чтобы итоговый отчёт показывал чистое состояние
-  systemctl reset-failed "$svc" 2>/dev/null || true
-
   # Отключаем автозапуск
   if systemctl disable "$svc" 2>>"$LOG"; then
     echo "  ✓ Автозапуск отключён" | tee -a "$LOG"
@@ -98,6 +95,8 @@ for (( i=${#SERVICES[@]}-1; i>=0; i-- )); do
     echo "  ✗ Ошибка маскировки" | tee -a "$LOG"
     ERRORS=$((ERRORS + 1))
   fi
+
+  systemctl reset-failed "$svc" 2>/dev/null || true
 
   echo "" | tee -a "$LOG"
 done
