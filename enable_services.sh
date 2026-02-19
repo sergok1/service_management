@@ -28,6 +28,7 @@ fi
 LOG="/var/log/services_management.log"
 ERRORS=0
 START_SETTLE=2  # секунд ожидания после старта для проверки
+UNIT_BACKUP_DIR="/var/lib/services_management/unit_backups"
 
 # --- Проверка существования юнита ---
 unit_exists() {
@@ -51,6 +52,19 @@ for svc in "${SERVICES[@]}"; do
   else
     echo "  ✗ Ошибка снятия маски" | tee -a "$LOG"
     ERRORS=$((ERRORS + 1))
+  fi
+
+  # Восстанавливаем unit-файл из бэкапа, если он был перемещён при маскировке
+  unit_file="/etc/systemd/system/$svc"
+  backup_file="$UNIT_BACKUP_DIR/$svc"
+  if [[ -f "$backup_file" && ! -f "$unit_file" ]]; then
+    if mv "$backup_file" "$unit_file"; then
+      echo "  ✓ Unit-файл восстановлен из бэкапа" | tee -a "$LOG"
+      systemctl daemon-reload
+    else
+      echo "  ✗ Не удалось восстановить unit-файл из бэкапа" | tee -a "$LOG"
+      ERRORS=$((ERRORS + 1))
+    fi
   fi
 
   # Включаем автозапуск

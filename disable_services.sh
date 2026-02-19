@@ -28,6 +28,7 @@ fi
 LOG="/var/log/services_management.log"
 ERRORS=0
 STOP_TIMEOUT=30  # секунд на остановку одного сервиса
+UNIT_BACKUP_DIR="/var/lib/services_management/unit_backups"
 
 # --- Проверка существования юнита ---
 unit_exists() {
@@ -67,7 +68,22 @@ for (( i=${#SERVICES[@]}-1; i>=0; i-- )); do
     ERRORS=$((ERRORS + 1))
   fi
 
-  # Маскируем — предотвращает запуск по зависимости
+  # Маскируем — предотвращает запуск по зависимости.
+  # systemctl mask создаёт симлинк /etc/systemd/system/<unit> -> /dev/null,
+  # но если там уже лежит реальный файл (не симлинк), mask откажет.
+  # В этом случае перемещаем файл в бэкап, чтобы mask прошёл.
+  unit_file="/etc/systemd/system/$svc"
+  if [[ -f "$unit_file" && ! -L "$unit_file" ]]; then
+    mkdir -p "$UNIT_BACKUP_DIR"
+    if mv "$unit_file" "$UNIT_BACKUP_DIR/$svc"; then
+      echo "  ✓ Unit-файл перемещён в бэкап: $UNIT_BACKUP_DIR/$svc" | tee -a "$LOG"
+      systemctl daemon-reload
+    else
+      echo "  ✗ Не удалось переместить unit-файл в бэкап" | tee -a "$LOG"
+      ERRORS=$((ERRORS + 1))
+    fi
+  fi
+
   if systemctl mask "$svc" 2>>"$LOG"; then
     echo "  ✓ Замаскирован" | tee -a "$LOG"
   else
