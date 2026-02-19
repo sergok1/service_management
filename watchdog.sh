@@ -95,8 +95,8 @@ log "=== Watchdog check started (fix=${AUTO_FIX}) ==="
 # ============================================================
 log "--- Проверка статуса сервисов ---"
 for svc in "${SERVICES[@]}"; do
-  enabled_state=$(systemctl is-enabled "$svc" 2>/dev/null || echo "unknown")
-  active_state=$(systemctl is-active "$svc" 2>/dev/null || echo "unknown")
+  enabled_state=$(systemctl is-enabled "$svc" 2>/dev/null | head -1 || echo "unknown")
+  active_state=$(systemctl is-active "$svc" 2>/dev/null | head -1 || echo "unknown")
 
   if [[ "$enabled_state" != "masked" ]]; then
     alert "$svc не замаскирован (enabled=$enabled_state)"
@@ -138,8 +138,13 @@ log "--- Проверка процессов ---"
 patterns=$(echo "$PROCESS_PATTERNS" | grep -v '^\s*#' | grep -v '^\s*$' | tr '\n' '|' | sed 's/|$//')
 
 if [[ -n "$patterns" ]]; then
-  # Исключаем сам watchdog из результатов
-  rogue_procs=$(pgrep -af "$patterns" 2>/dev/null | grep -v "watchdog\.\(sh\|conf\)" | grep -v "grep" || true)
+  rogue_procs=$(pgrep -af "$patterns" 2>/dev/null \
+    | grep -v "watchdog\.\(sh\|conf\)" \
+    | grep -v "grep" \
+    | grep -v "systemctl" \
+    | grep -v "journalctl" \
+    | grep -v "pgrep" \
+    || true)
   if [[ -n "$rogue_procs" ]]; then
     alert "Обнаружены процессы агентов мониторинга:"
     while IFS= read -r line; do
@@ -166,7 +171,10 @@ fi
 log "--- Проверка активных сессий ---"
 my_user="${MY_USER:-}"
 if [[ -n "$my_user" ]]; then
-  other_sessions=$(who 2>/dev/null | grep -v "^${my_user} " || true)
+  # who/last обрезают длинные имена, поэтому берём префикс до первой точки
+  my_user_short="${my_user%%.*}"
+
+  other_sessions=$(who 2>/dev/null | grep -v "^${my_user_short}" || true)
   if [[ -n "$other_sessions" ]]; then
     alert "Обнаружены сессии других пользователей:"
     while IFS= read -r line; do
@@ -177,9 +185,8 @@ if [[ -n "$my_user" ]]; then
     ok "Чужих сессий не обнаружено"
   fi
 
-  # Проверяем последние логины других пользователей за последние 24 часа
   recent_logins=$(last -s "$(date -d '24 hours ago' '+%Y-%m-%d %H:%M')" 2>/dev/null \
-    | grep -v "^${my_user} " \
+    | grep -v "^${my_user_short}" \
     | grep -v "^reboot " \
     | grep -v "^$" \
     | grep -v "^wtmp " \
@@ -199,10 +206,10 @@ fi
 # 4. Проверка: нет новых подозрительных systemd-юнитов
 # ============================================================
 log "--- Проверка новых юнитов ---"
+safe="${SAFE_UNITS:-smartmontools|services.watchdog}"
 suspicious_units=$(systemctl list-unit-files --state=enabled --no-pager --no-legend 2>/dev/null \
   | grep -iE 'monitor|agent|track|survey|watch|report|telemetry|collect|audit|inspect|spy|snoop' \
-  | grep -v "smartmontools" \
-  | grep -v "services_management" \
+  | grep -vE "$safe" \
   || true)
 if [[ -n "$suspicious_units" ]]; then
   alert "Обнаружены подозрительные enabled-юниты:"
