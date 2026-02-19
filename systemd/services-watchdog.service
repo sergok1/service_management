@@ -1,0 +1,9 @@
+[Unit]
+Description=Services Management Watchdog
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/services_management/watchdog.sh --fix
+StandardOutput=journal
+StandardError=journal
