@@ -63,7 +63,7 @@ for svc in "${SERVICES[@]}"; do
       echo "  ✓ Бэкап: $BACKUP_DIR/$svc.d/override.conf" | tee -a "$LOG"
     else
       echo "  ✗ Ошибка создания бэкапа" | tee -a "$LOG"
-      ((ERRORS++))
+      ERRORS=$((ERRORS + 1))
       continue
     fi
 
@@ -71,7 +71,7 @@ for svc in "${SERVICES[@]}"; do
       echo "  ✓ Удалён: $FILE" | tee -a "$LOG"
     else
       echo "  ✗ Ошибка удаления" | tee -a "$LOG"
-      ((ERRORS++))
+      ERRORS=$((ERRORS + 1))
     fi
 
     # Удалить пустую директорию
@@ -94,7 +94,7 @@ for svc in "${SERVICES[@]}"; do
       echo "  ✓ $svc перезапущен" | tee -a "$LOG"
     else
       echo "  ✗ Ошибка перезапуска $svc" | tee -a "$LOG"
-      ((ERRORS++))
+      ERRORS=$((ERRORS + 1))
     fi
   fi
 done

@@ -116,7 +116,7 @@ for svc in "${!configs[@]}"; do
     echo "  ✓ override.conf создан: $dir/override.conf" | tee -a "$LOG"
   else
     echo "  ✗ Ошибка создания override.conf" | tee -a "$LOG"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
   fi
 done
 
@@ -136,11 +136,11 @@ for svc in "${!configs[@]}"; do
       if systemctl is-failed --quiet "$svc"; then
         echo "  ⚠️  $svc упал после перезапуска (возможно, лимиты слишком жёсткие)" | tee -a "$LOG"
         journalctl -u "$svc" -n 5 --no-pager 2>/dev/null | tee -a "$LOG"
-        ((ERRORS++))
+        ERRORS=$((ERRORS + 1))
       fi
     else
       echo "  ✗ Ошибка перезапуска $svc" | tee -a "$LOG"
-      ((ERRORS++))
+      ERRORS=$((ERRORS + 1))
     fi
   else
     echo "  — $svc не активен, перезапуск не требуется" | tee -a "$LOG"

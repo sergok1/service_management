@@ -53,7 +53,7 @@ for (( i=${#SERVICES[@]}-1; i>=0; i-- )); do
       echo "  ✓ Остановлен" | tee -a "$LOG"
     else
       echo "  ✗ Ошибка остановки (таймаут ${STOP_TIMEOUT}с или сбой)" | tee -a "$LOG"
-      ((ERRORS++))
+      ERRORS=$((ERRORS + 1))
     fi
   else
     echo "  — Уже остановлен" | tee -a "$LOG"
@@ -64,7 +64,7 @@ for (( i=${#SERVICES[@]}-1; i>=0; i-- )); do
     echo "  ✓ Автозапуск отключён" | tee -a "$LOG"
   else
     echo "  ✗ Ошибка отключения автозапуска" | tee -a "$LOG"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
   fi
 
   # Маскируем — предотвращает запуск по зависимости
@@ -72,7 +72,7 @@ for (( i=${#SERVICES[@]}-1; i>=0; i-- )); do
     echo "  ✓ Замаскирован" | tee -a "$LOG"
   else
     echo "  ✗ Ошибка маскировки" | tee -a "$LOG"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
   fi
 
   echo "" | tee -a "$LOG"

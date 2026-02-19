@@ -50,7 +50,7 @@ for svc in "${SERVICES[@]}"; do
     echo "  ✓ Маска снята" | tee -a "$LOG"
   else
     echo "  ✗ Ошибка снятия маски" | tee -a "$LOG"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
   fi
 
   # Включаем автозапуск
@@ -58,7 +58,7 @@ for svc in "${SERVICES[@]}"; do
     echo "  ✓ Автозапуск включён" | tee -a "$LOG"
   else
     echo "  ✗ Ошибка включения автозапуска" | tee -a "$LOG"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
   fi
 
   # Запускаем
@@ -70,12 +70,12 @@ for svc in "${SERVICES[@]}"; do
     if ! systemctl is-active --quiet "$svc"; then
       echo "  ⚠️  Сервис упал после запуска!" | tee -a "$LOG"
       journalctl -u "$svc" -n 5 --no-pager 2>/dev/null | tee -a "$LOG"
-      ((ERRORS++))
+      ERRORS=$((ERRORS + 1))
     fi
   else
     echo "  ✗ Ошибка запуска" | tee -a "$LOG"
     journalctl -u "$svc" -n 5 --no-pager 2>/dev/null | tee -a "$LOG"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
   fi
 
   echo "" | tee -a "$LOG"
