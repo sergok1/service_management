@@ -175,10 +175,10 @@ fi
 log "--- Проверка активных сессий ---"
 my_user="${MY_USER:-}"
 if [[ -n "$my_user" ]]; then
-  # who/last обрезают длинные имена, поэтому берём префикс до первой точки
-  my_user_short="${my_user%%.*}"
-
-  other_sessions=$(who 2>/dev/null | grep -v "^${my_user_short}" || true)
+  # loginctl keeps the username in a dedicated column; unlike who, it is
+  # not confused by numeric UIDs shown by newer systemd releases.
+  other_sessions=$(loginctl list-sessions --no-legend 2>/dev/null \
+    | awk -v expected="$my_user" 'NF >= 3 && $3 != expected { print }' || true)
   if [[ -n "$other_sessions" ]]; then
     alert "Обнаружены сессии других пользователей:"
     while IFS= read -r line; do
@@ -190,10 +190,8 @@ if [[ -n "$my_user" ]]; then
   fi
 
   recent_logins=$(last -s "$(date -d '24 hours ago' '+%Y-%m-%d %H:%M')" 2>/dev/null \
-    | grep -v "^${my_user_short}" \
-    | grep -v "^reboot " \
-    | grep -v "^$" \
-    | grep -v "^wtmp " \
+    | awk -v expected="$my_user" \
+      '$1 != expected && $1 != "reboot" && $1 != "wtmp" && NF { print }' \
     | head -10 || true)
   if [[ -n "$recent_logins" ]]; then
     alert "Входы других пользователей за последние 24ч:"
